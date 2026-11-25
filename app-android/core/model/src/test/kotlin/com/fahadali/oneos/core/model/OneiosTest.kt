@@ -49,9 +49,16 @@ class OneiosTest {
     // --- Where it is offered ---------------------------------------------------
 
     @Test
-    fun theGalaxyS24UltraAndTheA56AreOfferedOnlyTheS24UltraIsTested() {
+    fun theGalaxyS24UltraAndTheS26AndTheA56AreOfferedOnlyTheS24UltraIsTested() {
+        val offeredBuiltIns = setOf(
+            Profiles.ID_S_ULTRA_8650,
+            Profiles.ID_S_8850,
+            Profiles.ID_S_8850_JP,
+            Profiles.ID_S_9965,
+            Profiles.ID_A56,
+        )
         for (p in Profiles.BUILT_IN) {
-            assertEquals(p.id, p.id == Profiles.ID_S_ULTRA_8650 || p.id == Profiles.ID_A56, OneiosSystem.offeredOn(p))
+            assertEquals(p.id, p.id in offeredBuiltIns, OneiosSystem.offeredOn(p))
             assertEquals(p.id, p.id == Profiles.ID_S_ULTRA_8650, OneiosSystem.testedOn(p))
         }
         assertFalse(OneiosSystem.offeredOn(null))
@@ -59,6 +66,16 @@ class OneiosTest {
         assertEquals("SM-S928", Profiles.S_ULTRA_8650.modelPrefix)
         assertTrue(OneiosSystem.offeredOn("SM-S928B", "e3q", "SM8650"))
         assertTrue(OneiosSystem.offeredOn("SM-S928U1", "e3q", "SM8650"))
+        // Galaxy S26 (base model): known profiles (SM-S942 SM8850, docomo SC-51G, Exynos m1s/s5e9965) and any
+        // unknown S26 carrier/global/SoC variant (e.g. SM-S941*, SCG36, m1q/m1s) are offered and make iOS 27.
+        assertTrue(OneiosSystem.offeredOn("SC-51G", "m1q", "SM8850"))
+        assertTrue(OneiosSystem.offeredOn("SM-S942B", "m1q", "SM8850"))
+        assertTrue(OneiosSystem.offeredOn("SM-S942B", "m1s", "s5e9965"))
+        assertTrue(OneiosSystem.offeredOn("SM-S941B", "m1q", "SM8850"))
+        assertTrue(OneiosSystem.offeredOn("SM-S941U1", "unknown_dev", "SM8850"))
+        assertTrue(OneiosSystem.offeredOn("SCG36", "m1q", "SM8850"))
+        assertTrue(OneiosSystem.offeredOn("Galaxy S26", "m1s", "s5e9965"))
+        assertFalse(OneiosSystem.testedOn(Profiles.resolve("SC-51G", "m1q", "SM8850").profile))
         // The Galaxy A56 (OneiOS issue 73): offered, with iOS 16.5; untested on an A56.
         assertTrue(OneiosSystem.offeredOn("SM-A566B", "a56x", "s5e8855"))
         assertFalse(OneiosSystem.testedOn(Profiles.resolve("SM-A566B", "a56x", "s5e8855").profile))
@@ -155,6 +172,36 @@ class OneiosTest {
         // Another phone: warned as before, without the A56's note.
         assertFalse(OneiosSystem.gate(Profiles.F8U, ticked = true).detail.contains("A56"))
         assertFalse(OneiosSystem.gate(Profiles.S_ULTRA_8650, ticked = false).detail.contains("A56"))
+    }
+
+    @Test
+    fun theGalaxyS26IsOfferedAndWarnedWithItsNoteEvenForUnknownVariants() {
+        val docomo = Profiles.resolve("SC-51G", "m1q", "SM8850").profile
+        assertEquals(Profiles.ID_S_8850_JP, docomo?.id)
+        val gDocomo = OneiosSystem.gate(docomo, ticked = true)
+        assertEquals(Level.WARN, gDocomo.level)
+        assertEquals(OneiosSystem.R_NOT_THIS_PHONE, gDocomo.reason)
+        assertTrue(gDocomo.detail, gDocomo.detail.contains("this phone is the Galaxy S26 (docomo)"))
+        assertTrue(gDocomo.detail, gDocomo.detail.endsWith(OneiosSystem.S26_BASE_NOTE))
+        assertEquals(Level.OK, OneiosSystem.gate(docomo, ticked = true, notThisPhoneTicked = true).level)
+
+        val unknownFacts = DeviceFacts(
+            brand = "samsung", manufacturer = "samsung", model = "SM-S941U", device = "m1q_us",
+            soc = SocInfo(SocVendor.QUALCOMM, "SM8850", "canoe", "Snapdragon 8 Elite Gen 5"),
+            socProps = SocProps(), oneUiRaw = "90000",
+            androidRelease = "17", sdk = 37, buildId = "TEST", fingerprint = "test",
+            vendorApiLevel = "202504", abis64 = listOf("arm64-v8a"),
+            form = FormResult(FormFactor.BAR, FormFactor.BAR, false, FormFactor.BAR, false, listOf("test")),
+            panels = emptyList(), panelsComplete = false, root = RootSignals(), storage = null, battery = null,
+            flashLocked = "0", verifiedBootState = "orange", screenLockSet = false, kernel = "6.12.69",
+        )
+        assertNull(Profiles.resolve(unknownFacts).profile)
+        assertTrue(OneiosSystem.offeredOn(null, unknownFacts))
+        val gUnknown = OneiosSystem.gate(null, ticked = false, facts = unknownFacts)
+        assertEquals(Level.WARN, gUnknown.level)
+        assertEquals(OneiosSystem.R_NOT_THIS_PHONE, gUnknown.reason)
+        assertTrue(gUnknown.detail, gUnknown.detail.contains("this phone is the Galaxy S26 (SM8850)"))
+        assertTrue(gUnknown.detail, gUnknown.detail.endsWith(OneiosSystem.S26_BASE_NOTE))
     }
 
     /**

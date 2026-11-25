@@ -169,6 +169,7 @@ class SystemsFragment : Fragment() {
     private val io = Executors.newSingleThreadExecutor()
     private val subs = mutableListOf<() -> Unit>()
     private var profile: PhoneProfile? = null
+    private var facts: com.fahadali.oneos.core.model.DeviceFacts? = null
     private var profileRead = false
     private var lastKey: List<Any?>? = null
     private var snapHelper: androidx.recyclerview.widget.PagerSnapHelper? = null
@@ -233,8 +234,9 @@ class SystemsFragment : Fragment() {
         })
 
         // This phone: from the last check when there is one, else read now (no root), as the OS image page does.
-        StageCheck.state.result?.facts?.let { f -> Profiles.resolve(f).profile }?.let {
-            profile = it
+        StageCheck.state.result?.facts?.let { f ->
+            facts = f
+            profile = Profiles.resolve(f).profile
             profileRead = true
         }
         if (!profileRead) {
@@ -243,6 +245,7 @@ class SystemsFragment : Fragment() {
                 val f = runCatching { FactProbe(app).collect(RootProbe(app).signals()) }.getOrNull()
                 val p = f?.let { Profiles.resolve(it).profile }
                 activity?.runOnUiThread {
+                    facts = f
                     profile = p
                     profileRead = true
                     redraw(force = true)
@@ -477,7 +480,7 @@ class SystemsFragment : Fragment() {
             CatalogEntry(pixel.name, pixel, R.drawable.os_pixel, available.any { it.id == pixel.id }),
             // Its own kind of system (docs/oneios.md): no image of the table, shown only on its phone, last.
             CatalogEntry(com.fahadali.oneos.core.model.OneiosSystem.NAME, null, R.drawable.os_oneios, true, own = true)
-                .takeIf { com.fahadali.oneos.core.model.OneiosSystem.offeredOn(p) },
+                .takeIf { com.fahadali.oneos.core.model.OneiosSystem.offeredOn(p, facts) },
         )
 
 

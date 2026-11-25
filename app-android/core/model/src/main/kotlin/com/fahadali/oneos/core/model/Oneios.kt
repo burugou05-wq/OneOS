@@ -36,11 +36,19 @@ object OneiosSystem {
     const val FORMAT = 1
 
     /**
-     * The phones that get the iOS card in Systems and the iOS page's setup steps: the Galaxy S24 Ultra, and the
-     * Galaxy A56 (SM-A566, a56x, s5e8855; OneiOS issue 73), which makes and starts iOS 16.5 (20F66), not iOS 27
-     * ([OneiosImageChoice.of]). The A56 path has not run on an A56 yet (untested on hardware).
+     * The phones that get the iOS card in Systems and the iOS page's setup steps: the Galaxy S24 Ultra, the Galaxy S26
+     * (Snapdragon SM8850 including Japanese docomo SC-51G, and Exynos 2600 s5e9965; unknown S26 variants are also
+     * offered via [isGalaxyS26Variant] so carrier/global models never hide the card), and the Galaxy A56
+     * (SM-A566, a56x, s5e8855; OneiOS issue 73), which makes and starts iOS 16.5 (20F66), not iOS 27
+     * ([OneiosImageChoice.of]). The S26 and A56 paths have not run on hardware yet.
      */
-    val PROFILE_IDS: Set<String> = setOf(Profiles.ID_S_ULTRA_8650, Profiles.ID_A56)
+    val PROFILE_IDS: Set<String> = setOf(
+        Profiles.ID_S_ULTRA_8650,
+        Profiles.ID_S_8850,
+        Profiles.ID_S_8850_JP,
+        Profiles.ID_S_9965,
+        Profiles.ID_A56,
+    )
 
     /**
      * The phone it is mainly tested and working on: the Galaxy S24 Ultra (SM-S928, e3q, SM8650); every other phone,
@@ -64,10 +72,17 @@ object OneiosSystem {
      * docs/s26.md). Still a WARN, never a refusal (the owner's 2026-11-16 rule; YMGPwcca/OneOS refuses the S26 Ultra,
      * this fork does not: docs/oneios.md, "Scope").
      */
+    const val S26_BASE_NOTE = "On the Galaxy S26 this app makes and starts iOS 27 (24A446) using the galaxy-s26 / " +
+        "galaxy-s26-exynos host profile (1080x2340@120 fallback); the switch, watchdog hand-off and the return to One UI " +
+        "in place are not verified on Galaxy S26 hardware yet. A return that fails restarts the phone into One UI."
+
     val NOT_THIS_PHONE_NOTES: Map<String, String> = mapOf(
         Profiles.ID_S_ULTRA_8850 to "On the Galaxy S26 Ultra iOS ran only in another fork's root-only test, never through " +
             "this switch; its watchdog hand-off and the return to One UI in place are not verified there. A return that " +
             "fails restarts the phone into One UI.",
+        Profiles.ID_S_8850 to S26_BASE_NOTE,
+        Profiles.ID_S_8850_JP to S26_BASE_NOTE,
+        Profiles.ID_S_9965 to S26_BASE_NOTE,
         Profiles.ID_A56 to "On the Galaxy A56 this app makes and starts iOS 16.5 (20F66), not iOS 27. iOS 16.5 reached " +
             "the lock screen there only in another fork (Musicalista/OneiOS-A56), and touch did not work there; this " +
             "app's A56 path has not run on an A56 yet. A return that fails restarts the phone into One UI.",
@@ -109,11 +124,60 @@ object OneiosSystem {
     fun switchArgs(versionCode: Int, takeover: Boolean): List<String> =
         listOf(versionCode.toString(), "1") + if (takeover) listOf(MODE_TAKEOVER) else emptyList()
 
+    /**
+     * Recognizes any base Galaxy S26 variant (including unmodeled carrier/global SM-S941*, SM-S942*, SC-51G, SCG36,
+     * codenames m1q/m1s, or Galaxy S26 on SM8850/s5e9965) so unknown S26 variants are always offered the iOS card
+     * even when [Profiles.resolve] returns null. Excludes S26 Ultra / S26+ / Fold / Flip.
+     */
+    fun isGalaxyS26Variant(model: String, device: String, soc: String): Boolean {
+        val m = model.trim().uppercase(Locale.ROOT)
+        val d = device.trim().lowercase(Locale.ROOT)
+        val s = soc.trim().uppercase(Locale.ROOT)
+        if (m.startsWith("SM-S948") || m.startsWith("SM-S946") || m.startsWith("SM-S947")) return false
+        if (d.startsWith("m3") || d.startsWith("m2") || d.startsWith("q8") || d.startsWith("b7")) return false
+        return m.startsWith("SM-S942") ||
+            m.startsWith("SM-S941") ||
+            m.startsWith("SC-51G") ||
+            m.startsWith("SCG36") ||
+            d.startsWith("m1q") ||
+            d.startsWith("m1s") ||
+            ((s == "SM8850" || s == "S5E9965") && m.contains("S26") &&
+                !m.contains("ULTRA") && !m.contains("+") && !m.contains("PLUS"))
+    }
+
+    fun isGalaxyS26Variant(facts: DeviceFacts?): Boolean {
+        if (facts == null) return false
+        if (isGalaxyS26Variant(facts.model, facts.device, facts.soc.model)) return true
+        if (facts.vendorModel.isNotEmpty() && isGalaxyS26Variant(facts.vendorModel, facts.device, facts.soc.model)) return true
+        val bl = facts.bootloader.trim().uppercase(Locale.ROOT)
+        return (bl.startsWith("S942") || bl.startsWith("S941") || bl.startsWith("SC51G") || bl.startsWith("SCG36")) &&
+            !facts.device.trim().lowercase(Locale.ROOT).let { it.startsWith("m3") || it.startsWith("m2") }
+    }
+
+    fun phoneLabel(profile: PhoneProfile?, facts: DeviceFacts?): String? = when {
+        profile != null -> profile.label
+        isGalaxyS26Variant(facts) -> {
+            val f = facts!!
+            val tag = f.soc.model.ifBlank { f.model.ifBlank { f.device } }
+            if (tag.isNotBlank()) "Galaxy S26 ($tag)" else "Galaxy S26"
+        }
+        else -> null
+    }
+
     fun offeredOn(profile: PhoneProfile?): Boolean = profile != null && profile.enabled && profile.id in PROFILE_IDS
 
-    /** The phone itself, by the three ids a profile matches on. */
-    fun offeredOn(model: String, device: String, soc: String, profiles: List<PhoneProfile> = Profiles.BUILT_IN): Boolean =
-        offeredOn(Profiles.resolve(model, device, soc, profiles).profile)
+    fun offeredOn(profile: PhoneProfile?, facts: DeviceFacts?): Boolean = when {
+        profile != null -> offeredOn(profile)
+        facts != null -> isGalaxyS26Variant(facts)
+        else -> false
+    }
+
+    /** The phone itself, by the three ids a profile matches on, or any base Galaxy S26 variant. */
+    fun offeredOn(model: String, device: String, soc: String, profiles: List<PhoneProfile> = Profiles.BUILT_IN): Boolean {
+        val resolved = Profiles.resolve(model, device, soc, profiles).profile
+        if (resolved != null) return offeredOn(resolved)
+        return isGalaxyS26Variant(model, device, soc)
+    }
 
     /** The phone it is mainly tested on ([TESTED_PROFILE_IDS]): false means the not-this-phone warning and its tick. */
     fun testedOn(profile: PhoneProfile?): Boolean = profile != null && profile.enabled && profile.id in TESTED_PROFILE_IDS
@@ -121,22 +185,32 @@ object OneiosSystem {
     /**
      * The system-kind gate. On the Galaxy S24 Ultra: a WARN the user has to tick
      * ([ACK]) before every switch, as for an untested profile, and OK once [ticked]. On any other
-     * phone, the Galaxy A56 included (the owner, 2026-11-16: they may try it): a WARN that says what to expect,
+     * phone, the Galaxy S26 / A56 included (the owner, 2026-11-16: they may try it): a WARN that says what to expect,
      * with what is known of it ([NOT_THIS_PHONE_NOTES]), until [notThisPhoneTicked] ([NOT_THIS_PHONE_ACK] on the
      * confirm screen), then OK.
      */
-    fun gate(profile: PhoneProfile?, ticked: Boolean, notThisPhoneTicked: Boolean = false): Finding = when {
-        !testedOn(profile) && !notThisPhoneTicked -> Finding(
-            GATE_ID, Level.WARN, "$NAME is mainly for the Galaxy S24 Ultra",
-            "$NAME is mainly tested and working on the Galaxy S24 Ultra 5G (SM-S928B)" +
-                (profile?.let { "; this phone is the ${it.label}" } ?: "; this phone is unknown") +
-                ": on it the code may be unstable, miss pieces, or not come back to One UI." +
-                (profile?.let { NOT_THIS_PHONE_NOTES[it.id] }?.let { " $it" } ?: ""),
-            R_NOT_THIS_PHONE,
-        )
-        !testedOn(profile) -> Finding(GATE_ID, Level.OK, "$NAME: not the phone it is mainly tested on, acknowledged")
-        !ticked -> Finding(GATE_ID, Level.WARN, "$NAME is experimental", ACK, R_EXPERIMENTAL)
-        else -> Finding(GATE_ID, Level.OK, "$NAME: experimental, acknowledged")
+    fun gate(
+        profile: PhoneProfile?,
+        ticked: Boolean,
+        notThisPhoneTicked: Boolean = false,
+        facts: DeviceFacts? = null,
+    ): Finding {
+        val label = phoneLabel(profile, facts)
+        val note = profile?.let { NOT_THIS_PHONE_NOTES[it.id] }
+            ?: if (isGalaxyS26Variant(facts)) S26_BASE_NOTE else null
+        return when {
+            !testedOn(profile) && !notThisPhoneTicked -> Finding(
+                GATE_ID, Level.WARN, "$NAME is mainly for the Galaxy S24 Ultra",
+                "$NAME is mainly tested and working on the Galaxy S24 Ultra 5G (SM-S928B)" +
+                    (label?.let { "; this phone is the $it" } ?: "; this phone is unknown") +
+                    ": on it the code may be unstable, miss pieces, or not come back to One UI." +
+                    (note?.let { " $it" } ?: ""),
+                R_NOT_THIS_PHONE,
+            )
+            !testedOn(profile) -> Finding(GATE_ID, Level.OK, "$NAME: not the phone it is mainly tested on, acknowledged")
+            !ticked -> Finding(GATE_ID, Level.WARN, "$NAME is experimental", ACK, R_EXPERIMENTAL)
+            else -> Finding(GATE_ID, Level.OK, "$NAME: experimental, acknowledged")
+        }
     }
 }
 

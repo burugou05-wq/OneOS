@@ -1085,8 +1085,11 @@ case "$MODE" in
         for d in runtime image control bin oneios_switch.sh oneios_return.sh; do
             [ -e "/data/$d" ] || continue
             at "making /data/$d read-only"
-            "$BB" mount --bind "/data/$d" "/data/$d" && "$BB" mount -o remount,bind,ro "/data/$d" ||
-                die_inner "could not make /data/$d read-only"
+            "$BB" mount --bind "/data/$d" "/data/$d" || die_inner "could not make /data/$d read-only"
+            if ! "$BB" mount -o remount,bind,ro "/data/$d" 2>/dev/null; then
+                "/data/runtime/$R_XNUHOST" --ro-bind "/data/$d" 2>/dev/null ||
+                    die_inner "could not make /data/$d read-only"
+            fi
         done
         at "checking that /data/control is read-only"
         if true 2>/dev/null > /data/control/.w; then
@@ -1572,6 +1575,11 @@ elif [ "$S24U" = 1 ]; then
             echo "WARNING: Galaxy S26 Ultra (SM8850): iOS ran there only in another fork's root-only test, never"
             echo "WARNING: through this switch. Its watchdog hand-off and the return to One UI in place are not"
             echo "WARNING: verified on it (a magic close of /dev/watchdog was refused, EBUSY). A return that fails"
+            echo "WARNING: restarts the phone into One UI." ;;
+        SM-S942*:*:*|SM-S941*:*:*|SC-51G*:*:*|SCG36*:*:*|*:m1q:*|*:m1s:*)
+            echo "WARNING: Galaxy S26 (${P_SOC:-?}): using the galaxy-s26 / galaxy-s26-exynos host profile"
+            echo "WARNING: (1080x2340@120 fallback); this switch, the watchdog hand-off and the return to One UI"
+            echo "WARNING: in place are not verified on Galaxy S26 hardware yet. A return that fails"
             echo "WARNING: restarts the phone into One UI." ;;
     esac
 fi

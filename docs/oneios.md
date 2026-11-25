@@ -121,6 +121,12 @@ switch's confirm has a third box ("mainly tested and working on the Galaxy S24 U
 phone it may be unstable, miss pieces, or not come back to One UI"). A Samsung device is what the code is
 written for; anything else may be unstable, half-working, or not come back.
 
+**The Galaxy S26 (Snapdragon SM8850 & Exynos s5e9965)** (`SM-S942`, `SM-S941`, docomo `SC-51G`, `SCG36`, `m1q`, `m1s`;
+profiles `s-8850`, `s-8850-jp`, `s-9965`, plus `OneiosSystem.isGalaxyS26Variant` for unmodeled S26 carrier/global
+variants) is also offered on Choose a system (`OneiosSystem.PROFILE_IDS` + `offeredOn(profile, facts)`) and builds iOS 27
+(24A446). Like other non-S24U phones, `OneiosSystem.gate` and `oneios_switch.sh` warn (rather than refuse) with
+`S26_BASE_NOTE` until the not-this-phone box is ticked.
+
 **The Galaxy S26 Ultra** (SM-S948, m3q, SM8850; profile `s-ultra-8850`; 2026-11-23, branch `sm8850-support`) is
 such another phone, with one more sentence in its warning (`OneiosSystem.NOT_THIS_PHONE_NOTES`, and four `WARNING:`
 lines in `oneios_switch.sh`'s own check): iOS ran on it only in another fork's root-only test (`YMGPwcca/OneiOS` and

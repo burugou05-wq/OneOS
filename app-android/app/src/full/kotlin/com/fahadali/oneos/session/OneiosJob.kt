@@ -286,15 +286,22 @@ object OneiosJob : BackgroundJob<OneiosJob.State>(State(), "oneos-oneios") {
 
     private fun offered(app: Context): Boolean =
         runCatching {
-            val profile = Profiles.resolve(FactProbe(app).collect(RootProbe(app).signals())).profile
+            val facts = FactProbe(app).collect(RootProbe(app).signals())
+            val profile = Profiles.resolve(facts).profile
             takeoverOffered = OneiosSystem.takeoverOfferedOn(profile)
             tested = OneiosSystem.testedOn(profile)
             notThisPhoneNote = profile?.let { OneiosSystem.NOT_THIS_PHONE_NOTES[it.id] }
+                ?: if (OneiosSystem.isGalaxyS26Variant(facts)) OneiosSystem.S26_BASE_NOTE else null
             val image = OneiosImageChoice.of(profile)
             choice = image
-            untestedPhone = profile?.takeIf { OneiosSystem.offeredOn(it) && !OneiosSystem.testedOn(it) }
-                ?.let { "${it.label}, iOS ${image.version}, untested there" }
-            OneiosSystem.offeredOn(profile)
+            val isOffered = OneiosSystem.offeredOn(profile, facts)
+            untestedPhone = if (isOffered && !OneiosSystem.testedOn(profile)) {
+                val label = OneiosSystem.phoneLabel(profile, facts) ?: facts.model.ifBlank { "this phone" }
+                "$label, iOS ${image.version}, untested there"
+            } else {
+                null
+            }
+            isOffered
         }.getOrDefault(false)
 
     // --- What the app checked at staging (shown beside root's status) ----------------
@@ -619,8 +626,9 @@ object OneiosJob : BackgroundJob<OneiosJob.State>(State(), "oneos-oneios") {
      * whose profile offers it ([OneiosSystem.takeoverOfferedOn]). Root's switch then gets the mode as its third word.
      */
     fun switch(ctx: Context, ticked: Boolean, notThisPhoneTicked: Boolean = false, takeover: Boolean = false) = job(ctx, Phase.SWITCHING, OneiosFlow.Job.SWITCH, "Checking before the switch…") { app ->
-        val profile = Profiles.resolve(FactProbe(app).collect(RootProbe(app).signals())).profile
-        val gate = OneiosSystem.gate(profile, ticked, notThisPhoneTicked)
+        val facts = FactProbe(app).collect(RootProbe(app).signals())
+        val profile = Profiles.resolve(facts).profile
+        val gate = OneiosSystem.gate(profile, ticked, notThisPhoneTicked, facts)
         if (gate.level != Level.OK) throw Failed(if (gate.level == Level.BLOCK) gate.detail else "Tick the box first: ${gate.title}.")
         if (takeover && !OneiosSystem.takeoverOfferedOn(profile)) throw Failed("${OneiosSystem.TAKEOVER_TITLE} is not offered on this phone.")
         // This build's session scripts and boot screen, before every switch: an app update reaches the stage

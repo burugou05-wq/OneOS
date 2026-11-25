@@ -1134,6 +1134,18 @@ class OneiosScriptTest {
             assertTrue(sh, warned(sh, "SM-S948B", device = "m3q", soc = "SM8850"))
             assertTrue(sh, output(sh, "SM-S948B", "m3q", "SM8850").contains(s26))
             assertTrue(sh, output(sh, "Galaxy S26 Ultra", "m3q", "SM8850").contains(s26))
+            // Galaxy S26 (base model, Snapdragon/Exynos/carrier variants): warned, not refused, with host-profile line.
+            val s26Base = "using the galaxy-s26 / galaxy-s26-exynos host profile"
+            for ((m, d, c) in listOf(
+                Triple("SC-51G", "m1q", "SM8850"),
+                Triple("SM-S942B", "m1q", "SM8850"),
+                Triple("SM-S941U", "m1q_us", "SM8850"),
+                Triple("SM-S942B", "m1s", "s5e9965"),
+            )) {
+                val out = output(sh, m, d, c)
+                assertTrue("$sh $m", out.contains("WARNING: OneiOS is mainly tested"))
+                assertTrue("$sh $m", out.contains(s26Base))
+            }
             assertFalse(sh, output(sh, "SM-S938B", "pa3q", "SM8750").contains(s26))
             assertFalse(sh, output(sh, "SM-S928B", "e3q", "SM8650").contains(s26))
             // The S24 Ultra: no line at all, as before.

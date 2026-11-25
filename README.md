@@ -1,3 +1,5 @@
+> **Galaxy S26 (Base Model) Fork (`burugou05-wq/OneOS`, branch `oneios`)** — Paired with [`burugou05-wq/OneiOS`](https://github.com/burugou05-wq/OneiOS). Enables the **iOS 27 (OneiOS)** card, IPSW build, and switch on **Galaxy S26** (`SM-S942*`, `SM-S941*`, `SC-51G`, `SCG36`, `m1q`, `m1s`, Snapdragon `SM8850` / Exynos `s5e9965`, and unmodeled S26 variants) and adds the `xnuhost --ro-bind` single-file read-only fallback for KernelSU BusyBox `1.36` in `switcher/assets/oneios_switch.sh` (see [docs/oneios.md](docs/oneios.md)).
+
 <p align="center">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="images/banner-dark-2x.png">
